@@ -1,0 +1,31 @@
+---
+import '../styles/globals.css';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+
+interface Props {
+	title?: string;
+	description?: string;
+}
+
+const { title = "Ao Loot Logs Comparator", description = "meh enjoy i guess? XD." } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="description" content={description} />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<meta name="generator" content={Astro.generator} />
+		<title>{title}</title>
+	</head>
+	<body class="bg-[#050505] text-stone-300 min-h-screen flex flex-col selection:bg-amber-500/30 selection:text-amber-100 font-sans">
+		<Header />
+		<main class="flex-1 w-full flex flex-col">
+			<slot />
+		</main>
+        <Footer/>
+	</body>
+</html>

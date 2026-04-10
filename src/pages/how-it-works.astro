@@ -1,0 +1,129 @@
+---
+// src/pages/how-it-works.astro
+import MainLayout from '../layouts/MainLayout.astro';
+---
+
+<MainLayout 
+	title="How to Use | AO Loot Logs Comparator" 
+	description="Step-by-step instructions on how to compare aostatistics loot logs with Albion Online chest logs."
+>
+	<div class="max-w-4xl mx-auto py-10 px-4 flex flex-col gap-10">
+		
+		<div class="text-center border-b border-stone-800 pb-8">
+			<h1 class="text-2xl font-bold text-stone-100 mb-2 uppercase tracking-widest">
+				Operating Instructions
+			</h1>
+			<p class="text-stone-500 text-sm max-w-2xl mx-auto uppercase tracking-wide">
+				Verify shared chest deposits against exported drop logs.
+			</p>
+		</div>
+
+		<div class="space-y-4">
+			<div class="bg-[#0a0a0a] border border-stone-800 p-6 flex flex-col md:flex-row gap-6 hover:border-stone-700 transition-colors">
+				<div class="flex-shrink-0">
+					<div class="w-12 h-12 border border-amber-500/50 text-amber-500 bg-[#050505] flex items-center justify-center text-lg font-bold font-mono">
+						01
+					</div>
+				</div>
+				<div>
+					<h2 class="text-lg font-bold text-stone-200 mb-2 uppercase tracking-wide">Export from AOStatistics</h2>
+					<p class="text-stone-400 text-xs leading-relaxed uppercase tracking-wide">
+						First, you need the raw data of what dropped during your activity. Go to your preferred tracking tool (like the AOStatistics app) and export the party loot log.
+					</p>
+				</div>
+			</div>
+
+			<div class="bg-[#0a0a0a] border border-stone-800 p-6 flex flex-col md:flex-row gap-6 hover:border-stone-700 transition-colors">
+				<div class="flex-shrink-0">
+					<div class="w-12 h-12 border border-amber-500/50 text-amber-500 bg-[#050505] flex items-center justify-center text-lg font-bold font-mono">
+						02
+					</div>
+				</div>
+				<div>
+					<h2 class="text-lg font-bold text-stone-200 mb-2 uppercase tracking-wide">Extract In-Game Chest Logs</h2>
+					<p class="text-stone-400 text-xs leading-relaxed uppercase tracking-wide">
+						Next, gather the deposit records from the guild or split chest. Since Albion doesn't have a native export button, you will need to use a logger to capture the chest UI data and convert it to a CSV. 
+						<br/><br/>
+						<a href="#chest-guide" class="text-amber-500 hover:text-amber-400 border-b border-amber-500/30 pb-0.5 inline-flex items-center gap-2">
+							[ VIEW DETAILED EXTRACTION GUIDE &darr; ]
+						</a>
+					</p>
+				</div>
+			</div>
+
+			<div class="bg-[#0a0a0a] border border-stone-800 p-6 flex flex-col md:flex-row gap-6 hover:border-stone-700 transition-colors">
+				<div class="flex-shrink-0">
+					<div class="w-12 h-12 border border-amber-500/50 text-amber-500 bg-[#050505] flex items-center justify-center text-lg font-bold font-mono">
+						03
+					</div>
+				</div>
+				<div>
+					<h2 class="text-lg font-bold text-stone-200 mb-2 uppercase tracking-wide">Run the Comparison</h2>
+					<p class="text-stone-400 text-xs leading-relaxed uppercase tracking-wide">
+						Navigate to the Dashboard, paste both sets of data into their respective input boxes, and run the analysis tool.
+					</p>
+				</div>
+			</div>
+		</div>
+
+		<div id="chest-guide" class="mt-8 bg-[#0a0a0a] border border-stone-800 scroll-mt-24">
+			<div class="bg-[#080808] border-b border-stone-800 p-6">
+				<h3 class="text-xl font-bold text-stone-100 uppercase tracking-widest flex items-center gap-3">
+					<span class="text-amber-500 font-mono">///</span> Chest Extraction Guide
+				</h3>
+				<p class="text-stone-500 mt-2 text-xs uppercase tracking-wide">
+					You must use an approved network-logging tool (like a Guild Discord Bot logger, Albion Chest Logger, or similar 3rd-party tools) that reads the data packets sent to your client when you open a chest.
+				</p>
+			</div>
+			
+			<div class="p-6 md:p-8 space-y-8 font-mono">
+				<div class="relative pl-8 border-l border-stone-800">
+					<div class="absolute -left-[5px] top-1 w-2.5 h-2.5 bg-amber-500 rotate-45"></div>
+					<h4 class="text-sm font-bold text-stone-200 mb-2 uppercase tracking-widest">A. Start your Logging Tool</h4>
+					<p class="text-stone-400 text-xs mb-3 uppercase tracking-wide">
+						Before interacting with the chest in-game, open your preferred chest logger application. Ensure the logger is actively capturing network traffic.
+					</p>
+					<div class="bg-[#050505] p-3 border border-stone-800 text-xs text-stone-600 uppercase tracking-wide">
+						> Note: Launch tool as Administrator if required. Albion Online must be running.
+					</div>
+				</div>
+
+				<div class="relative pl-8 border-l border-stone-800">
+					<div class="absolute -left-[5px] top-1 w-2.5 h-2.5 bg-amber-500 rotate-45"></div>
+					<h4 class="text-sm font-bold text-stone-200 mb-2 uppercase tracking-widest">B. Open the Chest & Load Logs</h4>
+					<p class="text-stone-400 text-xs mb-3 uppercase tracking-wide">
+						Go to the specific chest or tab in Albion Online where players were instructed to deposit their loot.
+					</p>
+					<ul class="list-none text-stone-400 text-xs space-y-2 uppercase tracking-wide">
+						<li><span class="text-stone-600 mr-2">-</span> Click the "Item Logs" button on the chest UI (the scroll icon).</li>
+						<li><span class="text-stone-600 mr-2">-</span> Scroll down slowly. The logger only captures what your client loads.</li>
+						<li><span class="text-stone-600 mr-2">-</span> Scroll until you cover the entire timeframe of the CTA/Roam.</li>
+					</ul>
+				</div>
+
+				<div class="relative pl-8 border-l border-stone-800 border-transparent">
+					<div class="absolute -left-[5px] top-1 w-2.5 h-2.5 bg-amber-500 rotate-45"></div>
+					<h4 class="text-sm font-bold text-stone-200 mb-2 uppercase tracking-widest">C. Export to CSV</h4>
+					<p class="text-stone-400 text-xs mb-3 uppercase tracking-wide">
+						Once you have scrolled past all relevant deposits, go back to your logging tool. Click Export/Save to CSV.
+					</p>
+					
+					<div class="bg-[#050505] border border-stone-800 p-4 mt-4">
+						<p class="text-[10px] text-amber-500/80 uppercase font-bold tracking-widest mb-3 border-b border-stone-800 pb-2">Expected Format Example:</p>
+						<pre class="text-xs text-stone-400 overflow-x-auto whitespace-pre-wrap">"Date" "Player" "Item" "Enchantment" "Quality" "Amount"
+"04/09/2026 15:22:31" "PlayerName" "Expert's Mace" "4" "4" "-1"
+"04/09/2026 11:20:55" "PlayerName" "Pork Omelette" "2" "1" "2"</pre>
+					</div>
+				</div>
+
+			</div>
+		</div>
+
+		<div class="text-center pt-6 pb-12">
+			<a href="/" class="inline-block bg-amber-600 hover:bg-amber-500 text-[#050505] font-bold py-3 px-10 text-xs tracking-widest uppercase transition-colors">
+				ACCESS DASHBOARD
+			</a>
+		</div>
+
+	</div>
+</MainLayout>
