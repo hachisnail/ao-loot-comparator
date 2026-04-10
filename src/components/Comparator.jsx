@@ -141,7 +141,7 @@ export default function Comparator() {
     document.body.removeChild(link);
   };
 
-const GOOGLE_CLIENT_ID = "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"; 
+const GOOGLE_CLIENT_ID = "410004272443-94oaqnc262mpq850ofdciudl6c61rd6l.apps.googleusercontent.com"; 
 
   const saveToUsersDrive = () => {
     if (!results) return;
