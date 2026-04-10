@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 
 export default function Comparator() {
   const [step, setStep] = useState(1);
@@ -10,6 +10,31 @@ export default function Comparator() {
   const [searchGuild, setSearchGuild] = useState('');
   const [searchItem, setSearchItem] = useState('');
   const [filterStatus, setFilterStatus] = useState('All');
+
+  // === NEW: TEMPORARY PERSISTENCE (Load from Browser Storage) ===
+  useEffect(() => {
+    const savedStats = localStorage.getItem('ao_statsLog');
+    const savedChest = localStorage.getItem('ao_chestLog');
+    const savedResults = localStorage.getItem('ao_results');
+    const savedStep = localStorage.getItem('ao_step');
+
+    if (savedStats) setStatsLog(savedStats);
+    if (savedChest) setChestLog(savedChest);
+    if (savedResults) setResults(JSON.parse(savedResults));
+    if (savedStep) setStep(parseInt(savedStep, 10));
+  }, []);
+
+  // === NEW: TEMPORARY PERSISTENCE (Save to Browser Storage) ===
+  useEffect(() => {
+    localStorage.setItem('ao_statsLog', statsLog);
+    localStorage.setItem('ao_chestLog', chestLog);
+    localStorage.setItem('ao_step', step.toString());
+    if (results) {
+      localStorage.setItem('ao_results', JSON.stringify(results));
+    } else {
+      localStorage.removeItem('ao_results');
+    }
+  }, [statsLog, chestLog, step, results]);
 
   const handleFileUpload = (event, setLogState) => {
     const file = event.target.files[0];
@@ -77,6 +102,7 @@ export default function Comparator() {
   };
 
   const reset = () => {
+    // Clear state and local storage
     setStatsLog('');
     setChestLog('');
     setResults(null);
@@ -85,6 +111,62 @@ export default function Comparator() {
     setSearchItem('');
     setFilterStatus('All');
     setStep(1);
+    localStorage.clear();
+  };
+
+  // === NEW: EXPORT TO CSV / DRIVE FUNCTION ===
+  const exportToCSV = () => {
+    if (!results) return;
+
+    // Create CSV Headers
+    let csvContent = "Player,Guild,Item,Expected,Deposited,Status\n";
+    
+    // Add Rows
+    results.forEach(row => {
+      // Wrap text in quotes to prevent issues with item names containing commas
+      csvContent += `"${row.player}","${row.guild}","${row.itemName}",${row.expected},${row.deposited},"${row.status}"\n`;
+    });
+
+    // Create a Blob and trigger a download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `loot_comparison_${new Date().toISOString().slice(0,10)}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Optional: Webhook to Google App Script for direct Drive saving
+  const saveToGoogleDrive = async () => {
+    // Replace this URL with your deployed Google Apps Script Web App URL
+    const googleAppScriptURL = 'YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL';
+    
+    if (googleAppScriptURL === 'YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL') {
+      alert("Please configure your Google Apps Script URL in Comparator.jsx to use this feature.");
+      return;
+    }
+
+    try {
+      // We send the JSON results to your Google Script, which formats it and saves it to a Google Sheet / Drive
+      await fetch(googleAppScriptURL, {
+        method: 'POST',
+        mode: 'no-cors', // Required for simple App Script integrations without complex CORS setup
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          date: new Date().toISOString(),
+          data: results 
+        })
+      });
+      alert("Logs successfully sent to Google Drive/Sheets!");
+    } catch (error) {
+      alert("Failed to save to Google Drive. Check console for errors.");
+      console.error(error);
+    }
   };
 
   const filteredResults = useMemo(() => {
@@ -118,6 +200,7 @@ export default function Comparator() {
 
       {step === 1 && (
         <div className="flex flex-col gap-3 animate-fade-in">
+          {/* ... (Step 1 code remains identical) ... */}
           <div className="flex justify-between items-end">
             <label className="text-stone-300 font-bold text-sm uppercase tracking-wide">AOStatistics Export</label>
             <label className="cursor-pointer text-stone-500 hover:text-amber-500 text-xs transition-colors flex items-center gap-2">
@@ -143,6 +226,7 @@ export default function Comparator() {
 
       {step === 2 && (
         <div className="flex flex-col gap-3 animate-fade-in">
+          {/* ... (Step 2 code remains identical) ... */}
           <div className="flex justify-between items-end">
             <label className="text-stone-300 font-bold text-sm uppercase tracking-wide">Chest Deposit Logs</label>
             <label className="cursor-pointer text-stone-500 hover:text-amber-500 text-xs transition-colors flex items-center gap-2">
@@ -173,13 +257,26 @@ export default function Comparator() {
 
       {step === 3 && results && (
         <div className="flex flex-col gap-4 animate-fade-in">
-          <div className="flex justify-between items-center mb-2">
+          
+          {/* === NEW: EXPORT ACTION BAR === */}
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-2 bg-[#0a0a0a] p-3 border border-stone-800">
             <div className="text-xs text-stone-500">
-              ANALYSIS COMPLETE — SHOWING <strong className="text-stone-200">{filteredResults.length}</strong> / {results.length} ENTRIES.
+              ANALYSIS COMPLETE — <strong className="text-stone-200">{filteredResults.length}</strong> / {results.length} ENTRIES.
             </div>
-            <button onClick={reset} className="text-xs text-stone-500 hover:text-amber-500 transition-colors uppercase tracking-widest">
-              [ RESET ]
-            </button>
+            
+            <div className="flex items-center gap-4">
+              <button onClick={exportToCSV} className="text-xs text-amber-500 hover:text-amber-400 transition-colors uppercase tracking-widest flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                EXPORT CSV
+              </button>
+              <button onClick={saveToGoogleDrive} className="text-xs text-emerald-500 hover:text-emerald-400 transition-colors uppercase tracking-widest flex items-center gap-2 border-l border-stone-800 pl-4">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
+                SAVE TO DRIVE
+              </button>
+              <button onClick={reset} className="text-xs text-stone-500 hover:text-red-500 transition-colors uppercase tracking-widest border-l border-stone-800 pl-4">
+                [ RESET ]
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-0 border-y border-stone-800 py-3 mb-2">
