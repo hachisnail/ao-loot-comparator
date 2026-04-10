@@ -141,33 +141,74 @@ export default function Comparator() {
     document.body.removeChild(link);
   };
 
-  // Optional: Webhook to Google App Script for direct Drive saving
-  const saveToGoogleDrive = async () => {
-    // Replace this URL with your deployed Google Apps Script Web App URL
-    const googleAppScriptURL = 'YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL';
+const GOOGLE_CLIENT_ID = "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"; 
+
+  const saveToUsersDrive = () => {
+    if (!results) return;
+
+    // 1. Initialize the Google Token Client
+    const tokenClient = window.google.accounts.oauth2.initTokenClient({
+      client_id: GOOGLE_CLIENT_ID,
+      scope: 'https://www.googleapis.com/auth/drive.file',
+      callback: async (tokenResponse) => {
+        if (tokenResponse && tokenResponse.access_token) {
+          // 2. If login is successful, upload the file
+          await uploadCsvToDrive(tokenResponse.access_token);
+        }
+      },
+    });
+
+    // Request an access token (this triggers the Google Login pop-up)
+    tokenClient.requestAccessToken();
+  };
+
+  const uploadCsvToDrive = async (accessToken) => {
+    // Generate the CSV content
+    let csvContent = "Player,Guild,Item,Expected,Deposited,Status\n";
+    results.forEach(row => {
+      csvContent += `"${row.player}","${row.guild}","${row.itemName}",${row.expected},${row.deposited},"${row.status}"\n`;
+    });
+
+    // Create the multipart request body
+    const boundary = '-------314159265358979323846';
+    const delimiter = "\r\n--" + boundary + "\r\n";
+    const close_delim = "\r\n--" + boundary + "--";
     
-    if (googleAppScriptURL === 'YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL') {
-      alert("Please configure your Google Apps Script URL in Comparator.jsx to use this feature.");
-      return;
-    }
+    const fileName = `AO_Loot_Comparison_${new Date().toISOString().slice(0,10)}.csv`;
+
+    const metadata = {
+      name: fileName,
+      mimeType: 'text/csv'
+    };
+
+    const multipartRequestBody =
+      delimiter +
+      'Content-Type: application/json\r\n\r\n' +
+      JSON.stringify(metadata) +
+      delimiter +
+      'Content-Type: text/csv\r\n\r\n' +
+      csvContent +
+      close_delim;
 
     try {
-      // We send the JSON results to your Google Script, which formats it and saves it to a Google Sheet / Drive
-      await fetch(googleAppScriptURL, {
+      // 3. Make the API Call to Google Drive
+      const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
         method: 'POST',
-        mode: 'no-cors', // Required for simple App Script integrations without complex CORS setup
         headers: {
-          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': `multipart/related; boundary=${boundary}`
         },
-        body: JSON.stringify({ 
-          date: new Date().toISOString(),
-          data: results 
-        })
+        body: multipartRequestBody
       });
-      alert("Logs successfully sent to Google Drive/Sheets!");
+
+      if (response.ok) {
+        alert(`SUCCESS! "${fileName}" has been saved to your personal Google Drive.`);
+      } else {
+        alert("Failed to upload file. Check console for details.");
+      }
     } catch (error) {
-      alert("Failed to save to Google Drive. Check console for errors.");
       console.error(error);
+      alert("Network error occurred while saving to Drive.");
     }
   };
 
@@ -271,10 +312,13 @@ export default function Comparator() {
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                 EXPORT CSV
               </button>
-              <button onClick={saveToGoogleDrive} className="text-xs text-emerald-500 hover:text-emerald-400 transition-colors uppercase tracking-widest flex items-center gap-2 border-l border-stone-800 pl-4">
+                <button 
+                onClick={saveToUsersDrive} // <-- Changed to the new function
+                className="text-xs text-emerald-500 hover:text-emerald-400 transition-colors uppercase tracking-widest flex items-center gap-2 border-l border-stone-800 pl-4"
+                >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
-                SAVE TO DRIVE
-              </button>
+                SAVE TO MY DRIVE
+                </button>
               <button onClick={reset} className="text-xs text-stone-500 hover:text-red-500 transition-colors uppercase tracking-widest border-l border-stone-800 pl-4">
                 [ RESET ]
               </button>
