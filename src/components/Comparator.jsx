@@ -1,5 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 
+
+// test commit
 export default function Comparator() {
   const [step, setStep] = useState(1);
   const [statsLog, setStatsLog] = useState('');

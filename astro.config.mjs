@@ -4,7 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 
 // https://astro.build/config
 export default defineConfig({
-  site: "https://hachisnail.github.io/",
+  site: "https://hachisnail.github.io",
   base: "/ao-loot-comparator",
   vite: {
     plugins: [tailwindcss()],
