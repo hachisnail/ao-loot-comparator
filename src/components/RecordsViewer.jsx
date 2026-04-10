@@ -1,5 +1,4 @@
-// src/components/RecordsViewer.jsx
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 
 export default function RecordsViewer() {
   const [driveFiles, setDriveFiles] = useState([]);
@@ -7,42 +6,84 @@ export default function RecordsViewer() {
   const [results, setResults] = useState(null);
   const [activeFileName, setActiveFileName] = useState('');
 
-  // Filtering state
   const [searchPlayer, setSearchPlayer] = useState('');
   const [searchGuild, setSearchGuild] = useState('');
   const [searchItem, setSearchItem] = useState('');
   const [filterStatus, setFilterStatus] = useState('All');
 
-  // REPLACE THIS WITH YOUR CLIENT ID
+  const [modal, setModal] = useState({ isOpen: false, title: '', message: '' });
+  const showModal = (title, message) => setModal({ isOpen: true, title, message });
+  const closeModal = () => setModal({ isOpen: false, title: '', message: '' });
+
+  // === NEW: Drive Connection State ===
+  const [isDriveConnected, setIsDriveConnected] = useState(false);
+
   const GOOGLE_CLIENT_ID = "410004272443-94oaqnc262mpq850ofdciudl6c61rd6l.apps.googleusercontent.com"; 
 
-  const fetchFilesFromDrive = () => {
-    setIsFetchingDrive(true);
+  // === NEW: Auto-load files if already connected ===
+  useEffect(() => {
+    const storedToken = localStorage.getItem('ao_drive_token');
+    const storedExpiry = localStorage.getItem('ao_drive_expiry');
+    if (storedToken && storedExpiry && Date.now() < parseInt(storedExpiry, 10)) {
+      setIsDriveConnected(true);
+      fetchFilesFromDrive(); // Automatically fetch!
+    }
+  }, []);
+
+  const requestDriveToken = (callback) => {
+    const storedToken = localStorage.getItem('ao_drive_token');
+    const storedExpiry = localStorage.getItem('ao_drive_expiry');
+    
+    if (storedToken && storedExpiry && Date.now() < parseInt(storedExpiry, 10)) {
+      setIsDriveConnected(true);
+      callback(storedToken);
+      return;
+    }
+
     const tokenClient = window.google.accounts.oauth2.initTokenClient({
       client_id: GOOGLE_CLIENT_ID,
       scope: 'https://www.googleapis.com/auth/drive.file',
-      callback: async (tokenResponse) => {
+      callback: (tokenResponse) => {
         if (tokenResponse && tokenResponse.access_token) {
-          try {
-            const response = await fetch("https://www.googleapis.com/drive/v3/files?q=name contains 'AO_Loot_Comparison' and mimeType='text/csv'&orderBy=createdTime desc", {
-              headers: { 'Authorization': `Bearer ${tokenResponse.access_token}` }
-            });
-            const data = await response.json();
-            
-            if (data.files && data.files.length > 0) {
-              setDriveFiles(data.files.map(f => ({ ...f, token: tokenResponse.access_token })));
-            } else {
-              alert("No previous comparisons found in your Drive.");
-              setDriveFiles([]);
-            }
-          } catch (error) {
-            alert("Error fetching files from Drive.");
-          }
-          setIsFetchingDrive(false);
+          localStorage.setItem('ao_drive_token', tokenResponse.access_token);
+          localStorage.setItem('ao_drive_expiry', (Date.now() + 3300 * 1000).toString());
+          setIsDriveConnected(true);
+          callback(tokenResponse.access_token);
         }
       },
     });
     tokenClient.requestAccessToken();
+  };
+
+  const fetchFilesFromDrive = () => {
+    setIsFetchingDrive(true);
+    requestDriveToken(async (token) => {
+      try {
+        const response = await fetch("https://www.googleapis.com/drive/v3/files?q=name contains 'AO_Loot_Comparison' and mimeType='text/csv'&orderBy=createdTime desc", {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (response.status === 401) {
+          localStorage.removeItem('ao_drive_token');
+          localStorage.removeItem('ao_drive_expiry');
+          setIsDriveConnected(false);
+          showModal("Session Expired", "Your Google Drive session expired. Please connect again.");
+          setIsFetchingDrive(false);
+          return;
+        }
+
+        const data = await response.json();
+        
+        if (data.files && data.files.length > 0) {
+          setDriveFiles(data.files.map(f => ({ ...f, token })));
+        } else {
+          setDriveFiles([]); // Auto-load ran, but no files found. Do nothing silently.
+        }
+      } catch (error) {
+        showModal("Connection Error", "There was an error fetching files from your Drive.");
+      }
+      setIsFetchingDrive(false);
+    });
   };
 
   const loadFileFromDrive = async (fileId, token, fileName) => {
@@ -65,11 +106,11 @@ export default function RecordsViewer() {
         for (let char of line) {
             if (char === '"') inQuotes = !inQuotes;
             else if (char === ',' && !inQuotes) {
-                parts.push(currentPart);
+                parts.push(currentPart.replace(/^"|"$/g, '')); 
                 currentPart = '';
             } else currentPart += char;
         }
-        parts.push(currentPart);
+        parts.push(currentPart.replace(/^"|"$/g, ''));
 
         if (parts.length >= 6) {
           loadedResults.push({
@@ -79,7 +120,7 @@ export default function RecordsViewer() {
             expected: parseInt(parts[3], 10) || 0,
             deposited: parseInt(parts[4], 10) || 0,
             status: parts[5],
-            itemId: parts[6] && parts[6] !== 'undefined' ? parts[6] : null
+            itemId: parts[6] && parts[6] !== 'undefined' && parts[6] !== '' ? parts[6] : null
           });
         }
       }
@@ -87,13 +128,12 @@ export default function RecordsViewer() {
       setResults(loadedResults);
       setActiveFileName(fileName);
       
-      // Reset filters on new load
       setSearchPlayer('');
       setSearchGuild('');
       setSearchItem('');
       setFilterStatus('All');
     } catch (error) {
-      alert("Error reading file from Drive.");
+      showModal("Parse Error", "There was an error reading the file data.");
     }
   };
 
@@ -109,8 +149,20 @@ export default function RecordsViewer() {
   }, [results, searchPlayer, searchGuild, searchItem, filterStatus]);
 
   return (
-    <div className="flex flex-col gap-6 w-full max-w-6xl mx-auto font-mono">
+    <div className="flex flex-col gap-6 w-full max-w-6xl mx-auto font-mono relative">
       
+      {modal.isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#050505]/80 backdrop-blur-sm p-4">
+          <div className="bg-[#0a0a0a] border border-stone-800 p-6 max-w-sm w-full shadow-2xl flex flex-col gap-4 animate-fade-in">
+            <h3 className="text-amber-500 font-bold uppercase tracking-widest text-lg">{modal.title}</h3>
+            <p className="text-stone-300 text-sm leading-relaxed">{modal.message}</p>
+            <button onClick={closeModal} className="mt-4 bg-stone-800 hover:bg-stone-700 text-stone-200 py-3 text-xs font-bold uppercase tracking-widest transition-colors w-full">
+              ACKNOWLEDGE
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* State 1: Pick a file */}
       {!results && (
         <div className="flex flex-col gap-6 animate-fade-in border border-stone-800 p-8 bg-[#080808]">
@@ -118,20 +170,26 @@ export default function RecordsViewer() {
             <h2 className="text-xl font-bold text-stone-200 uppercase tracking-widest mb-2">Cloud Ledger</h2>
             <p className="text-xs text-stone-500 tracking-wide mb-6">Access previously saved loot comparisons directly from your Google Drive.</p>
             
-            <button 
-              onClick={fetchFilesFromDrive} 
-              disabled={isFetchingDrive}
-              className="mx-auto bg-amber-600 hover:bg-amber-500 disabled:bg-stone-900 disabled:text-stone-700 text-[#050505] font-bold py-3 px-8 text-xs tracking-widest uppercase transition-colors flex items-center justify-center gap-3"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
-              {isFetchingDrive ? 'CONNECTING...' : 'CONNECT MY DRIVE'}
-            </button>
+            {/* UPDATED: Dynamic Button Text */}
+            {driveFiles.length === 0 && (
+              <button 
+                onClick={fetchFilesFromDrive} 
+                disabled={isFetchingDrive}
+                className="mx-auto bg-amber-600 hover:bg-amber-500 disabled:bg-stone-900 disabled:text-stone-700 text-[#050505] font-bold py-3 px-8 text-xs tracking-widest uppercase transition-colors flex items-center justify-center gap-3"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
+                {isFetchingDrive ? 'CONNECTING...' : isDriveConnected ? 'REFRESH RECORDS' : 'CONNECT MY DRIVE'}
+              </button>
+            )}
           </div>
 
           {driveFiles.length > 0 && (
-            <div className="mt-8 border-t border-stone-800 pt-6">
+            <div className="mt-4 border-t border-stone-800 pt-6 relative">
+               <button onClick={fetchFilesFromDrive} className="absolute top-6 right-2 text-[10px] text-stone-500 hover:text-amber-500 transition-colors uppercase tracking-widest">
+                [ REFRESH ]
+              </button>
               <span className="text-[10px] text-stone-500 uppercase tracking-widest mb-3 block">SELECT A RECORD:</span>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-96 overflow-y-auto custom-scrollbar pr-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-96 overflow-y-auto custom-scrollbar pr-2 mt-2">
                 {driveFiles.map(file => (
                   <div 
                     key={file.id} 

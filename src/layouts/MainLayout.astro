@@ -9,6 +9,9 @@ interface Props {
 }
 
 const { title = "Ao Loot Logs Comparator", description = "meh enjoy i guess? XD." } = Astro.props;
+
+// Dynamically handle the base URL for GitHub Pages
+const faviconPath = `${import.meta.env.BASE_URL}favicon.svg`.replace('//', '/');
 ---
 
 <!doctype html>
@@ -17,7 +20,7 @@ const { title = "Ao Loot Logs Comparator", description = "meh enjoy i guess? XD.
 		<meta charset="UTF-8" />
 		<meta name="description" content={description} />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<link rel="icon" type="image/svg+xml" href={faviconPath} />
 		<meta name="generator" content={Astro.generator} />
 		<title>{title}</title>
         <script src="https://accounts.google.com/gsi/client" async defer></script>

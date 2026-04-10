@@ -1,7 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
 
-
-// test commit
 export default function Comparator() {
   const [step, setStep] = useState(1);
   const [statsLog, setStatsLog] = useState('');
@@ -13,7 +11,49 @@ export default function Comparator() {
   const [searchItem, setSearchItem] = useState('');
   const [filterStatus, setFilterStatus] = useState('All');
 
-  // === NEW: TEMPORARY PERSISTENCE (Load from Browser Storage) ===
+  const [modal, setModal] = useState({ isOpen: false, title: '', message: '' });
+  const showModal = (title, message) => setModal({ isOpen: true, title, message });
+  const closeModal = () => setModal({ isOpen: false, title: '', message: '' });
+
+  // === NEW: Drive Connection State ===
+  const [isDriveConnected, setIsDriveConnected] = useState(false);
+
+  const GOOGLE_CLIENT_ID = "410004272443-94oaqnc262mpq850ofdciudl6c61rd6l.apps.googleusercontent.com"; 
+  
+  // Check token on initial load
+  useEffect(() => {
+    const storedToken = localStorage.getItem('ao_drive_token');
+    const storedExpiry = localStorage.getItem('ao_drive_expiry');
+    if (storedToken && storedExpiry && Date.now() < parseInt(storedExpiry, 10)) {
+      setIsDriveConnected(true);
+    }
+  }, []);
+
+  const requestDriveToken = (callback) => {
+    const storedToken = localStorage.getItem('ao_drive_token');
+    const storedExpiry = localStorage.getItem('ao_drive_expiry');
+    
+    if (storedToken && storedExpiry && Date.now() < parseInt(storedExpiry, 10)) {
+      setIsDriveConnected(true);
+      callback(storedToken);
+      return;
+    }
+
+    const tokenClient = window.google.accounts.oauth2.initTokenClient({
+      client_id: GOOGLE_CLIENT_ID,
+      scope: 'https://www.googleapis.com/auth/drive.file',
+      callback: (tokenResponse) => {
+        if (tokenResponse && tokenResponse.access_token) {
+          localStorage.setItem('ao_drive_token', tokenResponse.access_token);
+          localStorage.setItem('ao_drive_expiry', (Date.now() + 3300 * 1000).toString());
+          setIsDriveConnected(true);
+          callback(tokenResponse.access_token);
+        }
+      },
+    });
+    tokenClient.requestAccessToken();
+  };
+
   useEffect(() => {
     const savedStats = localStorage.getItem('ao_statsLog');
     const savedChest = localStorage.getItem('ao_chestLog');
@@ -26,16 +66,12 @@ export default function Comparator() {
     if (savedStep) setStep(parseInt(savedStep, 10));
   }, []);
 
-  // === NEW: TEMPORARY PERSISTENCE (Save to Browser Storage) ===
   useEffect(() => {
     localStorage.setItem('ao_statsLog', statsLog);
     localStorage.setItem('ao_chestLog', chestLog);
     localStorage.setItem('ao_step', step.toString());
-    if (results) {
-      localStorage.setItem('ao_results', JSON.stringify(results));
-    } else {
-      localStorage.removeItem('ao_results');
-    }
+    if (results) localStorage.setItem('ao_results', JSON.stringify(results));
+    else localStorage.removeItem('ao_results');
   }, [statsLog, chestLog, step, results]);
 
   const handleFileUpload = (event, setLogState) => {
@@ -61,9 +97,7 @@ export default function Comparator() {
         const itemId = parts[4].trim();
         const itemName = parts[5].trim();
         const quantity = parseInt(parts[6].trim(), 10) || 0;
-
         if (player && guild) playerGuilds[player] = guild;
-
         if (player && itemName) {
           const key = `${player}|${itemName}`;
           if (!records[key]) records[key] = { player, guild, itemName, itemId, expected: 0, deposited: 0 };
@@ -80,7 +114,6 @@ export default function Comparator() {
         const player = parts[1].trim();
         const itemName = parts[2].trim();
         const amount = parseInt(parts[5].trim(), 10) || 0;
-
         if (player && itemName) {
           const key = `${player}|${itemName}`;
           const guild = playerGuilds[player] || 'Unknown'; 
@@ -104,7 +137,6 @@ export default function Comparator() {
   };
 
   const reset = () => {
-    // Clear state and local storage
     setStatsLog('');
     setChestLog('');
     setResults(null);
@@ -113,102 +145,74 @@ export default function Comparator() {
     setSearchItem('');
     setFilterStatus('All');
     setStep(1);
-    localStorage.clear();
+    
+    // FIXED: Only remove specific log data, DO NOT use localStorage.clear()
+    localStorage.removeItem('ao_statsLog');
+    localStorage.removeItem('ao_chestLog');
+    localStorage.removeItem('ao_results');
+    localStorage.removeItem('ao_step');
   };
 
-  // === NEW: EXPORT TO CSV / DRIVE FUNCTION ===
   const exportToCSV = () => {
     if (!results) return;
-
-    // Create CSV Headers
-    let csvContent = "Player,Guild,Item,Expected,Deposited,Status\n";
-    
-    // Add Rows
+    let csvContent = "Player,Guild,Item,Expected,Deposited,Status,ItemId\n";
     results.forEach(row => {
-      // Wrap text in quotes to prevent issues with item names containing commas
-      csvContent += `"${row.player}","${row.guild}","${row.itemName}",${row.expected},${row.deposited},"${row.status}"\n`;
+      csvContent += `"${row.player}","${row.guild}","${row.itemName}",${row.expected},${row.deposited},"${row.status}","${row.itemId || ''}"\n`;
     });
-
-    // Create a Blob and trigger a download
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
-    link.setAttribute('download', `loot_comparison_${new Date().toISOString().slice(0,10)}.csv`);
+    link.setAttribute('download', `AO_Loot_Comparison_${new Date().toISOString().slice(0,10)}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-const GOOGLE_CLIENT_ID = "410004272443-94oaqnc262mpq850ofdciudl6c61rd6l.apps.googleusercontent.com"; 
-
   const saveToUsersDrive = () => {
     if (!results) return;
-
-    // 1. Initialize the Google Token Client
-    const tokenClient = window.google.accounts.oauth2.initTokenClient({
-      client_id: GOOGLE_CLIENT_ID,
-      scope: 'https://www.googleapis.com/auth/drive.file',
-      callback: async (tokenResponse) => {
-        if (tokenResponse && tokenResponse.access_token) {
-          // 2. If login is successful, upload the file
-          await uploadCsvToDrive(tokenResponse.access_token);
-        }
-      },
+    requestDriveToken(async (token) => {
+      await uploadCsvToDrive(token);
     });
-
-    // Request an access token (this triggers the Google Login pop-up)
-    tokenClient.requestAccessToken();
   };
 
   const uploadCsvToDrive = async (accessToken) => {
-    // Generate the CSV content
-    let csvContent = "Player,Guild,Item,Expected,Deposited,Status\n";
+    let csvContent = "Player,Guild,Item,Expected,Deposited,Status,ItemId\n";
     results.forEach(row => {
-      csvContent += `"${row.player}","${row.guild}","${row.itemName}",${row.expected},${row.deposited},"${row.status}"\n`;
+      csvContent += `"${row.player}","${row.guild}","${row.itemName}",${row.expected},${row.deposited},"${row.status}","${row.itemId || ''}"\n`;
     });
 
-    // Create the multipart request body
     const boundary = '-------314159265358979323846';
     const delimiter = "\r\n--" + boundary + "\r\n";
     const close_delim = "\r\n--" + boundary + "--";
-    
     const fileName = `AO_Loot_Comparison_${new Date().toISOString().slice(0,10)}.csv`;
 
-    const metadata = {
-      name: fileName,
-      mimeType: 'text/csv'
-    };
-
+    const metadata = { name: fileName, mimeType: 'text/csv' };
     const multipartRequestBody =
-      delimiter +
-      'Content-Type: application/json\r\n\r\n' +
-      JSON.stringify(metadata) +
-      delimiter +
-      'Content-Type: text/csv\r\n\r\n' +
-      csvContent +
-      close_delim;
+      delimiter + 'Content-Type: application/json\r\n\r\n' + JSON.stringify(metadata) +
+      delimiter + 'Content-Type: text/csv\r\n\r\n' + csvContent + close_delim;
 
     try {
-      // 3. Make the API Call to Google Drive
       const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': `multipart/related; boundary=${boundary}`
-        },
+        headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': `multipart/related; boundary=${boundary}` },
         body: multipartRequestBody
       });
-
-      if (response.ok) {
-        alert(`SUCCESS! "${fileName}" has been saved to your personal Google Drive.`);
+      
+      // Auto-logout if token is rejected
+      if (response.status === 401) {
+        localStorage.removeItem('ao_drive_token');
+        localStorage.removeItem('ao_drive_expiry');
+        setIsDriveConnected(false);
+        showModal("Session Expired", "Your Google Drive session expired. Please connect again.");
+      } else if (response.ok) {
+        showModal("Upload Successful", `Saved to your Google Drive as: ${fileName}`);
       } else {
-        alert("Failed to upload file. Check console for details.");
+        showModal("Upload Failed", "Failed to upload file. Please check permissions or try again later.");
       }
     } catch (error) {
-      console.error(error);
-      alert("Network error occurred while saving to Drive.");
+      showModal("Network Error", "A network error occurred while saving to Drive.");
     }
   };
 
@@ -224,26 +228,30 @@ const GOOGLE_CLIENT_ID = "410004272443-94oaqnc262mpq850ofdciudl6c61rd6l.apps.goo
   }, [results, searchPlayer, searchGuild, searchItem, filterStatus]);
 
   return (
-    <div className="flex flex-col gap-6 w-full max-w-6xl mx-auto font-mono">
+    <div className="flex flex-col gap-6 w-full max-w-6xl mx-auto font-mono relative">
       
-      {/* Minimalist Stepper */}
+      {modal.isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#050505]/80 backdrop-blur-sm p-4">
+          <div className="bg-[#0a0a0a] border border-stone-800 p-6 max-w-sm w-full shadow-2xl flex flex-col gap-4 animate-fade-in">
+            <h3 className="text-amber-500 font-bold uppercase tracking-widest text-lg">{modal.title}</h3>
+            <p className="text-stone-300 text-sm leading-relaxed">{modal.message}</p>
+            <button onClick={closeModal} className="mt-4 bg-stone-800 hover:bg-stone-700 text-stone-200 py-3 text-xs font-bold uppercase tracking-widest transition-colors w-full">
+              ACKNOWLEDGE
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-center gap-2 mb-2 text-xs uppercase tracking-widest">
-        <div className={`flex items-center gap-2 ${step >= 1 ? 'text-amber-500' : 'text-stone-700'}`}>
-          <span className="font-bold">[ 1 ] AOSTATS</span>
-        </div>
+        <div className={`flex items-center gap-2 ${step >= 1 ? 'text-amber-500' : 'text-stone-700'}`}><span className="font-bold">[ 1 ] AOSTATS</span></div>
         <div className={`w-8 h-[1px] ${step >= 2 ? 'bg-amber-500/50' : 'bg-stone-800'}`}></div>
-        <div className={`flex items-center gap-2 ${step >= 2 ? 'text-amber-500' : 'text-stone-700'}`}>
-          <span className="font-bold">[ 2 ] CHEST LOGS</span>
-        </div>
+        <div className={`flex items-center gap-2 ${step >= 2 ? 'text-amber-500' : 'text-stone-700'}`}><span className="font-bold">[ 2 ] CHEST LOGS</span></div>
         <div className={`w-8 h-[1px] ${step >= 3 ? 'bg-amber-500/50' : 'bg-stone-800'}`}></div>
-        <div className={`flex items-center gap-2 ${step >= 3 ? 'text-amber-500' : 'text-stone-700'}`}>
-          <span className="font-bold">[ 3 ] RESULTS</span>
-        </div>
+        <div className={`flex items-center gap-2 ${step >= 3 ? 'text-amber-500' : 'text-stone-700'}`}><span className="font-bold">[ 3 ] RESULTS</span></div>
       </div>
 
       {step === 1 && (
         <div className="flex flex-col gap-3 animate-fade-in">
-          {/* ... (Step 1 code remains identical) ... */}
           <div className="flex justify-between items-end">
             <label className="text-stone-300 font-bold text-sm uppercase tracking-wide">AOStatistics Export</label>
             <label className="cursor-pointer text-stone-500 hover:text-amber-500 text-xs transition-colors flex items-center gap-2">
@@ -269,7 +277,6 @@ const GOOGLE_CLIENT_ID = "410004272443-94oaqnc262mpq850ofdciudl6c61rd6l.apps.goo
 
       {step === 2 && (
         <div className="flex flex-col gap-3 animate-fade-in">
-          {/* ... (Step 2 code remains identical) ... */}
           <div className="flex justify-between items-end">
             <label className="text-stone-300 font-bold text-sm uppercase tracking-wide">Chest Deposit Logs</label>
             <label className="cursor-pointer text-stone-500 hover:text-amber-500 text-xs transition-colors flex items-center gap-2">
@@ -300,25 +307,22 @@ const GOOGLE_CLIENT_ID = "410004272443-94oaqnc262mpq850ofdciudl6c61rd6l.apps.goo
 
       {step === 3 && results && (
         <div className="flex flex-col gap-4 animate-fade-in">
-          
-          {/* === NEW: EXPORT ACTION BAR === */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-2 bg-[#0a0a0a] p-3 border border-stone-800">
             <div className="text-xs text-stone-500">
               ANALYSIS COMPLETE — <strong className="text-stone-200">{filteredResults.length}</strong> / {results.length} ENTRIES.
             </div>
-            
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-4">
               <button onClick={exportToCSV} className="text-xs text-amber-500 hover:text-amber-400 transition-colors uppercase tracking-widest flex items-center gap-2">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                 EXPORT CSV
               </button>
-                <button 
-                onClick={saveToUsersDrive} // <-- Changed to the new function
-                className="text-xs text-emerald-500 hover:text-emerald-400 transition-colors uppercase tracking-widest flex items-center gap-2 border-l border-stone-800 pl-4"
-                >
+              
+              {/* UPDATED: Drive Button Text */}
+              <button onClick={saveToUsersDrive} className="text-xs text-emerald-500 hover:text-emerald-400 transition-colors uppercase tracking-widest flex items-center gap-2 border-l border-stone-800 pl-4">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
-                SAVE TO MY DRIVE
-                </button>
+                {isDriveConnected ? 'SAVE TO DRIVE' : 'CONNECT & SAVE'}
+              </button>
+
               <button onClick={reset} className="text-xs text-stone-500 hover:text-red-500 transition-colors uppercase tracking-widest border-l border-stone-800 pl-4">
                 [ RESET ]
               </button>
@@ -326,14 +330,10 @@ const GOOGLE_CLIENT_ID = "410004272443-94oaqnc262mpq850ofdciudl6c61rd6l.apps.goo
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-0 border-y border-stone-800 py-3 mb-2">
-            <input type="text" placeholder="PLAYER..." value={searchPlayer} onChange={(e) => setSearchPlayer(e.target.value)}
-              className="bg-transparent border-r border-stone-800 px-3 text-xs text-stone-300 focus:outline-none placeholder-stone-700 uppercase" />
-            <input type="text" placeholder="GUILD..." value={searchGuild} onChange={(e) => setSearchGuild(e.target.value)}
-              className="bg-transparent border-r border-stone-800 px-3 text-xs text-stone-300 focus:outline-none placeholder-stone-700 uppercase" />
-            <input type="text" placeholder="ITEM..." value={searchItem} onChange={(e) => setSearchItem(e.target.value)}
-              className="bg-transparent border-r border-stone-800 px-3 text-xs text-stone-300 focus:outline-none placeholder-stone-700 uppercase" />
-            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
-              className="bg-transparent px-3 text-xs text-stone-300 focus:outline-none uppercase appearance-none cursor-pointer">
+            <input type="text" placeholder="PLAYER..." value={searchPlayer} onChange={(e) => setSearchPlayer(e.target.value)} className="bg-transparent border-r border-stone-800 px-3 text-xs text-stone-300 focus:outline-none placeholder-stone-700 uppercase" />
+            <input type="text" placeholder="GUILD..." value={searchGuild} onChange={(e) => setSearchGuild(e.target.value)} className="bg-transparent border-r border-stone-800 px-3 text-xs text-stone-300 focus:outline-none placeholder-stone-700 uppercase" />
+            <input type="text" placeholder="ITEM..." value={searchItem} onChange={(e) => setSearchItem(e.target.value)} className="bg-transparent border-r border-stone-800 px-3 text-xs text-stone-300 focus:outline-none placeholder-stone-700 uppercase" />
+            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-transparent px-3 text-xs text-stone-300 focus:outline-none uppercase appearance-none cursor-pointer">
               <option value="All">STATUS: ALL</option>
               <option value="Missing">STATUS: MISSING</option>
               <option value="Match">STATUS: MATCH</option>
@@ -361,7 +361,6 @@ const GOOGLE_CLIENT_ID = "410004272443-94oaqnc262mpq850ofdciudl6c61rd6l.apps.goo
                     <tr key={idx} className="hover:bg-[#111] transition-colors">
                       <td className="px-4 py-2 font-bold text-stone-300">{row.player}</td>
                       <td className="px-4 py-2 text-stone-600">{row.guild !== 'Unknown' ? `[${row.guild}]` : '-'}</td>
-                      
                       <td className="px-4 py-2 flex items-center gap-3 min-w-[200px]">
                         {row.itemId ? (
                           <img src={`https://render.albiononline.com/v1/item/${row.itemId}.png?size=32`} alt="" className="w-8 h-8 object-contain" loading="lazy" />
@@ -370,10 +369,8 @@ const GOOGLE_CLIENT_ID = "410004272443-94oaqnc262mpq850ofdciudl6c61rd6l.apps.goo
                         )}
                         <span className={row.itemId ? "text-stone-300" : "text-stone-600"}>{row.itemName}</span>
                       </td>
-
                       <td className="px-4 py-2 text-center">{row.expected}</td>
                       <td className={`px-4 py-2 text-center font-bold ${row.deposited < row.expected ? 'text-red-500' : 'text-stone-300'}`}>{row.deposited}</td>
-                      
                       <td className="px-4 py-2 text-right">
                         {row.status === 'Match' && <span className="text-emerald-500 tracking-widest">OK</span>}
                         {row.status === 'Missing' && <span className="text-red-500 font-bold tracking-widest">MISSING</span>}
