@@ -1,9 +1,10 @@
 ---
+const pathname = Astro.url.pathname;
 ---
 <header class="w-full bg-[#0a0a0a] border-b border-stone-800 sticky top-0 z-50 uppercase tracking-wider">
 	<div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
 		
-		<a href="/" class="flex items-center gap-3 group">
+		<a href="/ao-loot-comparator" class="flex items-center gap-3 group">
 			<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-amber-500 group-hover:text-amber-400 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter">
 				<path d="M14.5 17.5L3 6V3h3l11.5 11.5"></path>
 				<path d="M13 19l6-6"></path>
@@ -16,13 +17,22 @@
 		</a>
 
 		<nav class="hidden md:flex items-center gap-8">
-			<a href="/ao-loot-comparator" class="text-stone-400 hover:text-amber-400 transition-colors text-xs font-semibold">
+			<a 
+                href="/ao-loot-comparator" 
+                class={`transition-colors text-xs font-semibold ${pathname === '/ao-loot-comparator' || pathname === '/ao-loot-comparator/' ? 'text-amber-500' : 'text-stone-400 hover:text-amber-400'}`}
+            >
 				Dashboard
 			</a>
-            <a href="/ao-loot-comparator/records" class="text-stone-400 hover:text-amber-400 transition-colors text-xs font-semibold">
+            <a 
+                href="/ao-loot-comparator/records" 
+                class={`transition-colors text-xs font-semibold ${pathname.includes('/records') ? 'text-amber-500' : 'text-stone-400 hover:text-amber-400'}`}
+            >
 				Records
 			</a>
-			<a href="/ao-loot-comparator/how-it-works" class="text-stone-400 hover:text-amber-400 transition-colors text-xs font-semibold">
+			<a 
+                href="/ao-loot-comparator/how-it-works" 
+                class={`transition-colors text-xs font-semibold ${pathname.includes('/how-it-works') ? 'text-amber-500' : 'text-stone-400 hover:text-amber-400'}`}
+            >
 				Instructions
 			</a>
 		</nav>
