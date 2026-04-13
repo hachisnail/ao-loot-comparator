@@ -15,18 +15,15 @@ export default function RecordsViewer() {
   const showModal = (title, message) => setModal({ isOpen: true, title, message });
   const closeModal = () => setModal({ isOpen: false, title: '', message: '' });
 
-  // === NEW: Drive Connection State ===
   const [isDriveConnected, setIsDriveConnected] = useState(false);
-
   const GOOGLE_CLIENT_ID = "410004272443-94oaqnc262mpq850ofdciudl6c61rd6l.apps.googleusercontent.com"; 
 
-  // === NEW: Auto-load files if already connected ===
   useEffect(() => {
     const storedToken = localStorage.getItem('ao_drive_token');
     const storedExpiry = localStorage.getItem('ao_drive_expiry');
     if (storedToken && storedExpiry && Date.now() < parseInt(storedExpiry, 10)) {
       setIsDriveConnected(true);
-      fetchFilesFromDrive(); // Automatically fetch!
+      fetchFilesFromDrive(); 
     }
   }, []);
 
@@ -77,7 +74,7 @@ export default function RecordsViewer() {
         if (data.files && data.files.length > 0) {
           setDriveFiles(data.files.map(f => ({ ...f, token })));
         } else {
-          setDriveFiles([]); // Auto-load ran, but no files found. Do nothing silently.
+          setDriveFiles([]);
         }
       } catch (error) {
         showModal("Connection Error", "There was an error fetching files from your Drive.");
@@ -93,7 +90,8 @@ export default function RecordsViewer() {
       });
       const csvText = await response.text();
       const lines = csvText.trim().split('\n');
-      const loadedResults = [];
+      
+      const loadedPlayers = {};
       
       for (let i = 1; i < lines.length; i++) {
         const line = lines[i].trim();
@@ -113,19 +111,25 @@ export default function RecordsViewer() {
         parts.push(currentPart.replace(/^"|"$/g, ''));
 
         if (parts.length >= 6) {
-          loadedResults.push({
-            player: parts[0],
-            guild: parts[1],
-            itemName: parts[2],
-            expected: parseInt(parts[3], 10) || 0,
-            deposited: parseInt(parts[4], 10) || 0,
-            status: parts[5],
-            itemId: parts[6] && parts[6] !== 'undefined' && parts[6] !== '' ? parts[6] : null
-          });
+          const player = parts[0];
+          const guild = parts[1];
+          const itemName = parts[2];
+          const expected = parseInt(parts[3], 10) || 0;
+          const deposited = parseInt(parts[4], 10) || 0;
+          const itemId = parts[6] && parts[6] !== 'undefined' && parts[6] !== '' ? parts[6] : null;
+
+          if (!loadedPlayers[player]) {
+            loadedPlayers[player] = { player, guild, items: [], status: 'Match' };
+          }
+          
+          loadedPlayers[player].items.push({ itemName, expected, deposited, itemId });
+          if (deposited < expected) {
+              loadedPlayers[player].status = 'Missing';
+          }
         }
       }
       
-      setResults(loadedResults);
+      setResults(Object.values(loadedPlayers).sort((a, b) => a.player.localeCompare(b.player)));
       setActiveFileName(fileName);
       
       setSearchPlayer('');
@@ -137,12 +141,17 @@ export default function RecordsViewer() {
     }
   };
 
+  const uniqueGuilds = useMemo(() => {
+    if (!results) return [];
+    return Array.from(new Set(results.map(r => r.guild))).sort();
+  }, [results]);
+
   const filteredResults = useMemo(() => {
     if (!results) return [];
     return results.filter((row) => {
       const matchesPlayer = row.player.toLowerCase().includes(searchPlayer.toLowerCase());
-      const matchesGuild = row.guild.toLowerCase().includes(searchGuild.toLowerCase());
-      const matchesItem = row.itemName.toLowerCase().includes(searchItem.toLowerCase());
+      const matchesGuild = searchGuild === '' || row.guild === searchGuild;
+      const matchesItem = row.items.some(i => i.itemName.toLowerCase().includes(searchItem.toLowerCase()));
       const matchesStatus = filterStatus === 'All' || row.status === filterStatus;
       return matchesPlayer && matchesGuild && matchesItem && matchesStatus;
     });
@@ -163,14 +172,12 @@ export default function RecordsViewer() {
         </div>
       )}
 
-      {/* State 1: Pick a file */}
       {!results && (
         <div className="flex flex-col gap-6 animate-fade-in border border-stone-800 p-8 bg-[#080808]">
           <div className="text-center">
             <h2 className="text-xl font-bold text-stone-200 uppercase tracking-widest mb-2">Cloud Ledger</h2>
             <p className="text-xs text-stone-500 tracking-wide mb-6">Access previously saved loot comparisons directly from your Google Drive.</p>
             
-            {/* UPDATED: Dynamic Button Text */}
             {driveFiles.length === 0 && (
               <button 
                 onClick={fetchFilesFromDrive} 
@@ -206,7 +213,6 @@ export default function RecordsViewer() {
         </div>
       )}
 
-      {/* State 2: View results */}
       {results && (
         <div className="flex flex-col gap-4 animate-fade-in">
           
@@ -224,13 +230,19 @@ export default function RecordsViewer() {
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-0 border-y border-stone-800 py-3 mb-2">
             <input type="text" placeholder="PLAYER..." value={searchPlayer} onChange={(e) => setSearchPlayer(e.target.value)} className="bg-transparent border-r border-stone-800 px-3 text-xs text-stone-300 focus:outline-none placeholder-stone-700 uppercase" />
-            <input type="text" placeholder="GUILD..." value={searchGuild} onChange={(e) => setSearchGuild(e.target.value)} className="bg-transparent border-r border-stone-800 px-3 text-xs text-stone-300 focus:outline-none placeholder-stone-700 uppercase" />
+            
+            <select value={searchGuild} onChange={(e) => setSearchGuild(e.target.value)} className="bg-transparent border-r border-stone-800 px-3 text-xs text-stone-300 focus:outline-none uppercase appearance-none cursor-pointer">
+              <option value="" className="bg-[#0a0a0a]">GUILD: ALL</option>
+              {uniqueGuilds.map(g => (
+                <option key={g} value={g} className="bg-[#0a0a0a]">{g === 'Unknown' ? 'GUILD: NONE' : `GUILD: [${g}]`}</option>
+              ))}
+            </select>
+
             <input type="text" placeholder="ITEM..." value={searchItem} onChange={(e) => setSearchItem(e.target.value)} className="bg-transparent border-r border-stone-800 px-3 text-xs text-stone-300 focus:outline-none placeholder-stone-700 uppercase" />
             <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-transparent px-3 text-xs text-stone-300 focus:outline-none uppercase appearance-none cursor-pointer">
-              <option value="All">STATUS: ALL</option>
-              <option value="Missing">STATUS: MISSING</option>
-              <option value="Match">STATUS: MATCH</option>
-              <option value="Extra">STATUS: EXTRA</option>
+              <option value="All" className="bg-[#0a0a0a]">STATUS: ALL</option>
+              <option value="Missing" className="bg-[#0a0a0a]">STATUS: MISSING</option>
+              <option value="Match" className="bg-[#0a0a0a]">STATUS: CLEARED</option>
             </select>
           </div>
 
@@ -238,36 +250,41 @@ export default function RecordsViewer() {
             <table className="w-full text-left text-xs text-stone-400 relative">
               <thead className="bg-[#0f0f0f] text-stone-500 border-b border-stone-800 sticky top-0 z-10">
                 <tr>
-                  <th scope="col" className="px-4 py-3 font-normal">PLAYER</th>
-                  <th scope="col" className="px-4 py-3 font-normal">GUILD</th>
-                  <th scope="col" className="px-4 py-3 font-normal">ITEM</th>
-                  <th scope="col" className="px-4 py-3 text-center font-normal">EXP.</th>
-                  <th scope="col" className="px-4 py-3 text-center font-normal">DEP.</th>
-                  <th scope="col" className="px-4 py-3 text-right font-normal">STATUS</th>
+                  <th scope="col" className="px-4 py-3 font-normal w-[20%]">PLAYER</th>
+                  <th scope="col" className="px-4 py-3 font-normal w-[20%]">GUILD</th>
+                  <th scope="col" className="px-4 py-3 font-normal w-[60%]">LOOTED ITEMS</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-900">
                 {filteredResults.length === 0 ? (
-                  <tr><td colSpan="6" className="px-4 py-12 text-center text-stone-600">NO RECORDS FOUND</td></tr>
+                  <tr><td colSpan="3" className="px-4 py-12 text-center text-stone-600">NO RECORDS FOUND</td></tr>
                 ) : (
                   filteredResults.map((row, idx) => (
                     <tr key={idx} className="hover:bg-[#111] transition-colors">
-                      <td className="px-4 py-2 font-bold text-stone-300">{row.player}</td>
-                      <td className="px-4 py-2 text-stone-600">{row.guild !== 'Unknown' ? `[${row.guild}]` : '-'}</td>
-                      <td className="px-4 py-2 flex items-center gap-3 min-w-[200px]">
-                        {row.itemId ? (
-                          <img src={`https://render.albiononline.com/v1/item/${row.itemId}.png?size=32`} alt="" className="w-8 h-8 object-contain" loading="lazy" />
-                        ) : (
-                          <div className="w-8 h-8 border border-stone-800 flex items-center justify-center text-stone-700 font-sans text-xs">?</div>
-                        )}
-                        <span className={row.itemId ? "text-stone-300" : "text-stone-600"}>{row.itemName}</span>
-                      </td>
-                      <td className="px-4 py-2 text-center">{row.expected}</td>
-                      <td className={`px-4 py-2 text-center font-bold ${row.deposited < row.expected ? 'text-red-500' : 'text-stone-300'}`}>{row.deposited}</td>
-                      <td className="px-4 py-2 text-right">
-                        {row.status === 'Match' && <span className="text-emerald-500 tracking-widest">OK</span>}
-                        {row.status === 'Missing' && <span className="text-red-500 font-bold tracking-widest">MISSING</span>}
-                        {row.status === 'Extra' && <span className="text-amber-500 tracking-widest">EXTRA</span>}
+                      <td className="px-4 py-4 font-bold text-stone-300 align-top">{row.player}</td>
+                      <td className="px-4 py-4 text-stone-600 align-top">{row.guild !== 'Unknown' ? `[${row.guild}]` : '-'}</td>
+                      <td className="px-4 py-4 align-top">
+                        <div className="flex flex-wrap gap-3">
+                          {row.items.map((i, iIdx) => (
+                            <div 
+                              key={iIdx} 
+                              className={`relative flex items-center justify-center border p-1.5 rounded-sm ${i.deposited >= i.expected ? 'border-stone-800 bg-[#0a0a0a]' : 'border-red-900/60 bg-red-950/30'}`}
+                              title={`${i.itemName} (Deposited: ${i.deposited} / Expected: ${i.expected})`}
+                            >
+                              {i.itemId ? (
+                                <img src={`https://render.albiononline.com/v1/item/${i.itemId}.png?size=32`} alt={i.itemName} className="w-8 h-8 object-contain" loading="lazy" />
+                              ) : (
+                                <div className="w-8 h-8 border border-stone-800 flex items-center justify-center text-stone-700 font-sans text-xs">?</div>
+                              )}
+                              
+                              {(i.expected > 1 || i.deposited < i.expected) && (
+                                <div className={`absolute -bottom-1.5 -right-1.5 px-1 py-0.5 text-[9px] font-mono leading-none rounded-sm border ${i.deposited >= i.expected ? 'bg-stone-800 border-stone-700 text-stone-300' : 'bg-red-950 border-red-900 text-red-400'}`}>
+                                  {i.deposited < i.expected ? `${i.deposited}/${i.expected}` : `x${i.expected}`}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
                       </td>
                     </tr>
                   ))
