@@ -146,14 +146,26 @@ export default function RecordsViewer() {
     return Array.from(new Set(results.map(r => r.guild))).sort();
   }, [results]);
 
+  // FIX: Applied the same item-level dynamic filtering from Comparator to the Viewer
   const filteredResults = useMemo(() => {
     if (!results) return [];
-    return results.filter((row) => {
+    return results.map(row => {
+      const filteredItems = row.items.filter(i => {
+        const matchesItemSearch = i.itemName.toLowerCase().includes(searchItem.toLowerCase());
+        const isMatch = i.deposited >= i.expected;
+        const isMissing = i.deposited < i.expected;
+        
+        const matchesFilter = filterStatus === 'All' 
+                           || (filterStatus === 'Match' && isMatch)
+                           || (filterStatus === 'Missing' && isMissing);
+                           
+        return matchesItemSearch && matchesFilter;
+      });
+      return { ...row, displayItems: filteredItems };
+    }).filter(row => {
       const matchesPlayer = row.player.toLowerCase().includes(searchPlayer.toLowerCase());
       const matchesGuild = searchGuild === '' || row.guild === searchGuild;
-      const matchesItem = row.items.some(i => i.itemName.toLowerCase().includes(searchItem.toLowerCase()));
-      const matchesStatus = filterStatus === 'All' || row.status === filterStatus;
-      return matchesPlayer && matchesGuild && matchesItem && matchesStatus;
+      return matchesPlayer && matchesGuild && row.displayItems.length > 0;
     });
   }, [results, searchPlayer, searchGuild, searchItem, filterStatus]);
 
@@ -265,7 +277,8 @@ export default function RecordsViewer() {
                       <td className="px-4 py-4 text-stone-600 align-top">{row.guild !== 'Unknown' ? `[${row.guild}]` : '-'}</td>
                       <td className="px-4 py-4 align-top">
                         <div className="flex flex-wrap gap-3">
-                          {row.items.map((i, iIdx) => (
+                          {/* FIX: Render from displayItems here as well */}
+                          {row.displayItems.map((i, iIdx) => (
                             <div 
                               key={iIdx} 
                               className={`relative flex items-center justify-center border p-1.5 rounded-sm ${i.deposited >= i.expected ? 'border-stone-800 bg-[#0a0a0a]' : 'border-red-900/60 bg-red-950/30'}`}

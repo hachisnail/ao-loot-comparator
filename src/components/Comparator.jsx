@@ -117,18 +117,25 @@ export default function Comparator() {
 
     const chestLines = chestLog.split('\n');
     chestLines.forEach(line => {
-      if (!line.trim() || line.includes('"Date" "Player"')) return;
-      const parts = line.split('"').filter(p => p.trim() !== '');
+      if (!line.trim() || (line.includes('Date') && line.includes('Player'))) return;
+      
+      let parts = [];
+      if (line.includes('"')) {
+        parts = line.split('"').filter(p => p.trim() !== '');
+      } else {
+        parts = line.split('\t').map(p => p.trim());
+      }
+
       if (parts.length >= 6) {
         const dateStr = parts[0].trim();
-        const t = new Date(dateStr).getTime();
+        const t = new Date(dateStr.replace(/-/g, '/') + " UTC").getTime();
         
         if (!isNaN(t) && t < timeThreshold) return; 
 
         const itemName = parts[2].trim();
-        const amount = parseInt(parts[5].trim(), 10) || 0;
+        const amount = parseInt(parts[5].replace(/,/g, '').trim(), 10) || 0;
         
-        if (itemName && amount > 0) {
+        if (itemName) {
             globalDeposited[itemName] = (globalDeposited[itemName] || 0) + amount;
         }
       }
@@ -246,14 +253,33 @@ export default function Comparator() {
     return Array.from(new Set(results.map(r => r.guild))).sort();
   }, [results]);
 
+  // FIX: Item-level dynamic filtering so that the searched/selected items are properly displayed
   const filteredResults = useMemo(() => {
     if (!results) return [];
-    return results.filter((row) => {
+    
+    return results.map(row => {
+      // Filter out items that don't match the criteria inside each row
+      const filteredItems = row.items.filter(i => {
+        const matchesItemSearch = i.itemName.toLowerCase().includes(searchItem.toLowerCase());
+        const isMatch = i.deposited >= i.expected;
+        const isMissing = i.deposited < i.expected;
+        
+        const matchesFilter = filterStatus === 'All' 
+                           || (filterStatus === 'Match' && isMatch)
+                           || (filterStatus === 'Missing' && isMissing);
+                           
+        return matchesItemSearch && matchesFilter;
+      });
+      
+      // Return a modified row that holds only the matched display items
+      return { ...row, displayItems: filteredItems };
+    }).filter(row => {
+      // Determine if player row itself matches
       const matchesPlayer = row.player.toLowerCase().includes(searchPlayer.toLowerCase());
       const matchesGuild = searchGuild === '' || row.guild === searchGuild;
-      const matchesItem = row.items.some(i => i.itemName.toLowerCase().includes(searchItem.toLowerCase()));
-      const matchesStatus = filterStatus === 'All' || row.status === filterStatus;
-      return matchesPlayer && matchesGuild && matchesItem && matchesStatus;
+      
+      // Hide the entire player row if there are no items left to display after filtering
+      return matchesPlayer && matchesGuild && row.displayItems.length > 0;
     });
   }, [results, searchPlayer, searchGuild, searchItem, filterStatus]);
 
@@ -339,7 +365,7 @@ export default function Comparator() {
         <div className="flex flex-col gap-4 animate-fade-in">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-2 bg-[#0a0a0a] p-3 border border-stone-800">
             <div className="text-xs text-stone-500">
-              ANALYSIS COMPLETE — <strong className="text-stone-200">{filteredResults.length}</strong> / {results.length} USERS.
+              ANALYSIS COMPLETE — SHOWING <strong className="text-stone-200">{filteredResults.length}</strong> USERS.
             </div>
             <div className="flex flex-wrap items-center gap-4">
               <button onClick={exportToCSV} className="text-xs text-amber-500 hover:text-amber-400 transition-colors uppercase tracking-widest flex items-center gap-2">
@@ -395,7 +421,8 @@ export default function Comparator() {
                       <td className="px-4 py-4 text-stone-600 align-top">{row.guild !== 'Unknown' ? `[${row.guild}]` : '-'}</td>
                       <td className="px-4 py-4 align-top">
                         <div className="flex flex-wrap gap-3">
-                          {row.items.map((i, iIdx) => (
+                          {/* FIX: Render from displayItems so filtered-out items are completely hidden */}
+                          {row.displayItems.map((i, iIdx) => (
                             <div 
                               key={iIdx} 
                               className={`relative flex items-center justify-center border p-1.5 rounded-sm ${i.deposited >= i.expected ? 'border-stone-800 bg-[#0a0a0a]' : 'border-red-900/60 bg-red-950/30'}`}
