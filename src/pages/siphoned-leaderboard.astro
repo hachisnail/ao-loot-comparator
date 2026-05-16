@@ -1,0 +1,27 @@
+---
+// src/pages/siphoned-leaderboard.astro
+import MainLayout from "../layouts/MainLayout.astro";
+import SiphonedLeaderboardComponent from "../components/SiphonedLeaderboard.jsx";
+---
+
+<MainLayout 
+    title="Siphoned Leaderboard | AO Loot Logs" 
+    description="Calculate your guild's siphoned energy leaderboard and push it directly to Discord."
+>
+	<div class="max-w-4xl mx-auto px-4 py-10 w-full flex flex-col gap-6">
+		
+        <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-stone-800 pb-4 mb-4">
+			<div>
+				<h1 class="text-2xl font-bold text-stone-100 uppercase tracking-widest flex items-center gap-3">
+                    <span class="text-[#5865f2]">///</span> Siphoned Leaderboard
+                </h1>
+				<p class="text-stone-500 mt-2 text-sm tracking-wide uppercase leading-relaxed max-w-2xl">
+					Paste your raw logs below, select a timeframe to filter by, and push the automatically calculated leaderboard directly to a Discord Webhook.
+				</p>
+			</div>
+		</div>
+
+        <SiphonedLeaderboardComponent client:load />
+
+	</div>
+</MainLayout>
