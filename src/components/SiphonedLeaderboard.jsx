@@ -168,7 +168,7 @@ export default function SiphonedLeaderboard() {
       }
 
       const payload = {
-        username: "AO Ledger Bot",
+        username: "Siphoned Leaderboard",
         embeds: embeds
       };
 
