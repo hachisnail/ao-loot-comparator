@@ -8,9 +8,7 @@ interface Props {
 	description?: string;
 }
 
-const { title = "Ao Loot Logs Comparator", description = "meh enjoy i guess? XD." } = Astro.props;
-
-// Dynamically handle the base URL for GitHub Pages
+const { title = "AO Loot Logs Comparator", description = "Automate your Albion Online loot analysis and accounting ledgers." } = Astro.props;
 const faviconPath = `${import.meta.env.BASE_URL}favicon.svg`.replace('//', '/');
 ---
 
@@ -23,6 +21,12 @@ const faviconPath = `${import.meta.env.BASE_URL}favicon.svg`.replace('//', '/');
 		<link rel="icon" type="image/svg+xml" href={faviconPath} />
 		<meta name="generator" content={Astro.generator} />
 		<title>{title}</title>
+        
+        <meta property="og:title" content={title} />
+        <meta property="og:description" content={description} />
+        <meta property="og:color" content="#d97706" /> <meta property="og:type" content="website" />
+        <meta name="theme-color" content="#d97706">
+
         <script src="https://accounts.google.com/gsi/client" async defer></script>
         <script src="https://apis.google.com/js/api.js" async defer></script>
 	</head>
