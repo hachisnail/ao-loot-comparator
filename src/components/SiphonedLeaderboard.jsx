@@ -3,7 +3,7 @@ import { useState } from 'react';
 export default function SiphonedLeaderboard() {
   const [webhookUrl, setWebhookUrl] = useState('');
   const [rawLogs, setRawLogs] = useState('');
-  const [timeframe, setTimeframe] = useState('24h'); // Default to 24h since 'all' is removed
+  const [timeframe, setTimeframe] = useState('24h');
   const [status, setStatus] = useState({ state: 'idle', message: '' }); 
 
   const timeframeLabels = {
@@ -24,6 +24,7 @@ export default function SiphonedLeaderboard() {
       const lines = rawLogs.split('\n');
       let summary = [];
       let isSummaryFormat = false;
+      let latestDateStr = ''; // Tracker for the dynamic title
 
       const headerPreview = lines.slice(0, 3).join(' ').toLowerCase();
       if (headerPreview.includes('deposits') || headerPreview.includes('withdrawals') || headerPreview.includes('net')) {
@@ -76,7 +77,10 @@ export default function SiphonedLeaderboard() {
 
             const time = new Date(dateStr.replace(/-/g, '/')).getTime(); 
             if (!isNaN(time)) {
-              if (time > maxTime) maxTime = time;
+              if (time > maxTime) {
+                maxTime = time;
+                latestDateStr = dateStr; // Save the highest date string found
+              }
               parsedLogs.push({ time, player, amount });
             }
           }
@@ -88,7 +92,6 @@ export default function SiphonedLeaderboard() {
         }
 
         let cutoff = 0;
-        // The math to calculate 24h, 7d, and 4w (28 days)
         if (timeframe === '24h') cutoff = maxTime - (24 * 60 * 60 * 1000);
         else if (timeframe === '7d') cutoff = maxTime - (7 * 24 * 60 * 60 * 1000);
         else if (timeframe === '4w') cutoff = maxTime - (28 * 24 * 60 * 60 * 1000); 
@@ -139,6 +142,12 @@ export default function SiphonedLeaderboard() {
 
       const fullTable = output.join('\n');
       
+      // Determine dynamic Embed Title
+      let embedTitle = "🏆 Siphoned Leaderboard";
+      if (latestDateStr) {
+        embedTitle = `🏆 Siphoned Leaderboard (As of ${latestDateStr} UTC)`;
+      }
+
       const embeds = [];
       const filterText = !isSummaryFormat ? `**Filter:** ${timeframeLabels[timeframe]}\n\n` : '';
 
@@ -148,19 +157,19 @@ export default function SiphonedLeaderboard() {
         const part2 = [output[0], output[1], ...output.slice(half)].join('\n'); 
 
         embeds.push({
-          title: "🏆 Siphoned Leaderboard (Part 1)",
+          title: `${embedTitle} (Part 1)`,
           description: `${filterText}\`\`\`markdown\n${part1}\n\`\`\``,
           color: 16753920 
         });
         embeds.push({
-          title: "🏆 Siphoned Leaderboard (Part 2)",
+          title: `${embedTitle} (Part 2)`,
           description: `\`\`\`markdown\n${part2}\n\`\`\``,
           color: 16753920,
           footer: { text: "Generated via AO Loot Logs Widget" }
         });
       } else {
         embeds.push({
-          title: "🏆 Siphoned Leaderboard",
+          title: embedTitle,
           description: `${filterText}\`\`\`markdown\n${fullTable}\n\`\`\``,
           color: 16753920,
           footer: { text: "Generated via AO Loot Logs Widget" }
