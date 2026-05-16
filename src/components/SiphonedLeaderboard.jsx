@@ -26,28 +26,28 @@ export default function SiphonedLeaderboard() {
       let summary = [];
       let isSummaryFormat = false;
 
-      // Auto-detect if user pasted a pre-calculated summary table instead of raw logs
       const headerPreview = lines.slice(0, 3).join(' ').toLowerCase();
       if (headerPreview.includes('deposits') || headerPreview.includes('withdrawals') || headerPreview.includes('net')) {
         isSummaryFormat = true;
       }
 
       if (isSummaryFormat) {
-        // --- MODE 1: User pasted the Summary Table ---
         lines.forEach(line => {
-          if (!line.trim() || line.toLowerCase().includes('player') || line.toLowerCase().includes('deposits')) return;
+          if (!line.trim() || line.toLowerCase().includes('player') || line.toLowerCase().includes('deposits') || line.includes('---')) return;
           
-          // Split by Tabs, or fallback to multiple spaces if copied weirdly
-          let parts = line.split('\t').map(p => p.trim());
+          let parts = line.split('|').map(p => p.trim()).filter(p => p !== '');
+          if (parts.length < 3) {
+            parts = line.split('\t').map(p => p.trim());
+          }
           if (parts.length < 3 && line.includes('  ')) {
             parts = line.split(/\s{2,}/).map(p => p.trim());
           }
           
           if (parts.length >= 3) {
-            const player = parts[0];
+            const player = parts[0].replace(/\*\*/g, ''); 
             const deposits = parseInt(parts[1].replace(/,/g, ''), 10) || 0;
             const withdrawals = parseInt(parts[2].replace(/,/g, ''), 10) || 0;
-            let net = parts.length >= 4 ? parseInt(parts[3].replace(/,/g, ''), 10) : (deposits - withdrawals);
+            let net = parts.length >= 4 ? parseInt(parts[3].replace(/,/g, '').replace(/\+/g, ''), 10) : (deposits - withdrawals);
 
             if (player) {
               summary.push({ player, deposits, withdrawals, net });
@@ -60,11 +60,9 @@ export default function SiphonedLeaderboard() {
           return;
         }
 
-        // Sort by Net Descending
         summary.sort((a, b) => b.net - a.net);
 
       } else {
-        // --- MODE 2: User pasted Raw Logs (Date, Player, Reason, Amount) ---
         const parsedLogs = [];
         let maxTime = 0;
 
@@ -118,50 +116,52 @@ export default function SiphonedLeaderboard() {
         summary = Object.values(playerMap).sort((a, b) => b.net - a.net);
       }
 
-      // --- GENERATE PROPER DISCORD TABLE ---
+      // --- GENERATE MONOSPACE DISCORD TABLE ---
       let output = [];
       
-      if (!isSummaryFormat) {
-        output.push(`**Filter:** ${timeframeLabels[timeframe]}\n`);
-      }
+      const headerRow = `| ${"Player".padEnd(14)} | ${"Deposits".padStart(8)} | ${"Withdraw".padStart(8)} | ${"Net".padStart(6)} |`;
+      const sepRow    = `| :---${"".padEnd(11, "-")} | :------: | :------: | :----: |`;
       
-      output.push("| Player | Deposits | Withdrawals | Net |");
-      output.push("|---|---|---|---|");
+      output.push(headerRow);
+      output.push(sepRow);
 
       summary.forEach(row => {
-        const p = row.player;
-        const d = row.deposits.toLocaleString('en-US'); 
-        const w = row.withdrawals.toLocaleString('en-US'); 
+        const p = row.player.padEnd(14).substring(0, 14); 
+        const d = row.deposits.toLocaleString('en-US').padStart(8); 
+        const w = row.withdrawals.toLocaleString('en-US').padStart(8); 
         
         let netStr = row.net.toLocaleString('en-US');
         if (row.net > 0) netStr = `+${netStr}`; 
+        const n = netStr.padStart(6);
         
-        output.push(`| **${p}** | ${d} | ${w} | **${netStr}** |`);
+        output.push(`| ${p} | ${d} | ${w} | ${n} |`);
       });
 
       const fullTable = output.join('\n');
       
       const embeds = [];
-      if (fullTable.length > 4000) {
+      const filterText = !isSummaryFormat ? `**Filter:** ${timeframeLabels[timeframe]}\n\n` : '';
+
+      if (fullTable.length > 3900) {
         const half = Math.ceil(output.length / 2);
         const part1 = output.slice(0, half).join('\n');
-        const part2 = [output[isSummaryFormat ? 0 : 2], output[isSummaryFormat ? 1 : 3], ...output.slice(half)].join('\n'); 
+        const part2 = [output[0], output[1], ...output.slice(half)].join('\n'); 
 
         embeds.push({
           title: "🏆 Siphoned Leaderboard (Part 1)",
-          description: part1,
+          description: `${filterText}\`\`\`markdown\n${part1}\n\`\`\``,
           color: 16753920 
         });
         embeds.push({
           title: "🏆 Siphoned Leaderboard (Part 2)",
-          description: part2,
+          description: `\`\`\`markdown\n${part2}\n\`\`\``,
           color: 16753920,
           footer: { text: "Generated via AO Loot Logs Widget" }
         });
       } else {
         embeds.push({
           title: "🏆 Siphoned Leaderboard",
-          description: fullTable,
+          description: `${filterText}\`\`\`markdown\n${fullTable}\n\`\`\``,
           color: 16753920,
           footer: { text: "Generated via AO Loot Logs Widget" }
         });
@@ -200,7 +200,7 @@ export default function SiphonedLeaderboard() {
             <label className="text-stone-300 font-bold text-sm uppercase tracking-wide block mb-2">Discord Webhook URL</label>
             <input 
               type="password" 
-              placeholder="https://discord.com/api/webhooks/..."
+              placeholder="[https://discord.com/api/webhooks/](https://discord.com/api/webhooks/)..."
               value={webhookUrl}
               onChange={(e) => setWebhookUrl(e.target.value)}
               className="w-full bg-[#050505] border border-stone-800 p-3 text-xs text-stone-300 focus:outline-none focus:border-[#5865f2]/80 transition-colors"
