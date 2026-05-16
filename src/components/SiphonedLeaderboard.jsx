@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 export default function SiphonedLeaderboard() {
   const [webhookUrl, setWebhookUrl] = useState('');
+  const [messageId, setMessageId] = useState(''); // NEW: State for the Message ID
   const [rawLogs, setRawLogs] = useState('');
   const [timeframe, setTimeframe] = useState('24h');
   const [status, setStatus] = useState({ state: 'idle', message: '' }); 
@@ -18,13 +19,13 @@ export default function SiphonedLeaderboard() {
       return;
     }
 
-    setStatus({ state: 'loading', message: 'Processing data and sending to Discord...' });
+    setStatus({ state: 'loading', message: messageId.trim() ? 'Updating existing Discord message...' : 'Sending new message to Discord...' });
 
     try {
       const lines = rawLogs.split('\n');
       let summary = [];
       let isSummaryFormat = false;
-      let latestDateStr = ''; // Tracker for the dynamic title
+      let latestDateStr = '';
 
       const headerPreview = lines.slice(0, 3).join(' ').toLowerCase();
       if (headerPreview.includes('deposits') || headerPreview.includes('withdrawals') || headerPreview.includes('net')) {
@@ -79,7 +80,7 @@ export default function SiphonedLeaderboard() {
             if (!isNaN(time)) {
               if (time > maxTime) {
                 maxTime = time;
-                latestDateStr = dateStr; // Save the highest date string found
+                latestDateStr = dateStr; 
               }
               parsedLogs.push({ time, player, amount });
             }
@@ -119,7 +120,6 @@ export default function SiphonedLeaderboard() {
         summary = Object.values(playerMap).sort((a, b) => b.net - a.net);
       }
 
-      // --- GENERATE MONOSPACE DISCORD TABLE ---
       let output = [];
       
       const headerRow = `| ${"Player".padEnd(14)} | ${"Deposits".padStart(8)} | ${"Withdraw".padStart(8)} | ${"Net".padStart(6)} |`;
@@ -142,7 +142,6 @@ export default function SiphonedLeaderboard() {
 
       const fullTable = output.join('\n');
       
-      // Determine dynamic Embed Title
       let embedTitle = "🏆 Siphoned Leaderboard";
       if (latestDateStr) {
         embedTitle = `🏆 Siphoned Leaderboard (As of ${latestDateStr} UTC)`;
@@ -181,17 +180,32 @@ export default function SiphonedLeaderboard() {
         embeds: embeds
       };
 
-      const response = await fetch(webhookUrl, {
-        method: "POST",
+      // --- NEW LOGIC: POST (Create New) vs PATCH (Edit Existing) ---
+      let targetUrl = webhookUrl.trim();
+      let fetchMethod = "POST";
+
+      if (messageId.trim()) {
+        // Clean URL to ensure no trailing slash, then append the message ID
+        targetUrl = `${targetUrl.replace(/\/$/, '')}/messages/${messageId.trim()}`;
+        fetchMethod = "PATCH"; // Webhooks use PATCH to edit existing messages
+      }
+
+      const response = await fetch(targetUrl, {
+        method: fetchMethod,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
 
       if (response.ok) {
-        setStatus({ state: 'success', message: 'Successfully published leaderboard to Discord!' });
+        setStatus({ state: 'success', message: messageId.trim() ? 'Successfully updated the existing Discord message!' : 'Successfully sent a new message to Discord!' });
         setRawLogs(''); 
       } else {
-        setStatus({ state: 'error', message: `Discord API Error: ${response.statusText}` });
+        // Handle specific error where they try to edit a message they didn't send
+        if (response.status === 404 && fetchMethod === "PATCH") {
+          setStatus({ state: 'error', message: 'Discord API Error: Message ID not found. Did this webhook create it?' });
+        } else {
+          setStatus({ state: 'error', message: `Discord API Error: ${response.status} ${response.statusText}` });
+        }
       }
 
     } catch (err) {
@@ -205,16 +219,34 @@ export default function SiphonedLeaderboard() {
       <div className="bg-[#0a0a0a] border border-stone-800 p-6 flex flex-col gap-4">
         
         <div className="border-b border-stone-800 pb-4 mb-2 flex flex-col md:flex-row gap-4">
-          <div className="flex-1">
-            <label className="text-stone-300 font-bold text-sm uppercase tracking-wide block mb-2">Discord Webhook URL</label>
-            <input 
-              type="password" 
-              placeholder="https://discord.com/api/webhooks/..."
-              value={webhookUrl}
-              onChange={(e) => setWebhookUrl(e.target.value)}
-              className="w-full bg-[#050505] border border-stone-800 p-3 text-xs text-stone-300 focus:outline-none focus:border-[#5865f2]/80 transition-colors"
-            />
+          <div className="flex-1 flex flex-col gap-4">
+            <div>
+              <label className="text-stone-300 font-bold text-sm uppercase tracking-wide block mb-2">Discord Webhook URL</label>
+              <input 
+                type="password" 
+                placeholder="https://discord.com/api/webhooks/..."
+                value={webhookUrl}
+                onChange={(e) => setWebhookUrl(e.target.value)}
+                className="w-full bg-[#050505] border border-stone-800 p-3 text-xs text-stone-300 focus:outline-none focus:border-[#5865f2]/80 transition-colors"
+              />
+            </div>
+            
+            {/* NEW: Message ID Input */}
+            <div className="bg-[#111] p-3 border border-stone-800 rounded-sm">
+              <label className="text-stone-300 font-bold text-xs uppercase tracking-wide block mb-1">Message ID to Edit (Optional)</label>
+              <input 
+                type="text" 
+                placeholder="e.g. 1152039248234"
+                value={messageId}
+                onChange={(e) => setMessageId(e.target.value)}
+                className="w-full bg-[#050505] border border-stone-700 p-2 text-xs text-stone-300 focus:outline-none focus:border-amber-500/80 transition-colors"
+              />
+              <p className="text-[10px] text-stone-500 mt-1 uppercase tracking-wider">
+                Leave blank to send a new message. To edit, right-click a message sent by this webhook and "Copy Message ID".
+              </p>
+            </div>
           </div>
+
           <div className="w-full md:w-48">
             <label className="text-stone-300 font-bold text-sm uppercase tracking-wide block mb-2">Time Filter</label>
             <select 
@@ -254,7 +286,7 @@ export default function SiphonedLeaderboard() {
           disabled={status.state === 'loading'}
           className="mt-2 bg-[#5865f2] hover:bg-[#4752c4] disabled:bg-stone-900 disabled:text-stone-700 text-white font-bold py-3 px-8 text-xs tracking-widest uppercase transition-colors w-full"
         >
-          {status.state === 'loading' ? 'PROCESSING...' : 'PUSH LEADERBOARD TO DISCORD'}
+          {status.state === 'loading' ? 'PROCESSING...' : messageId.trim() ? 'UPDATE DISCORD MESSAGE' : 'PUSH LEADERBOARD TO DISCORD'}
         </button>
 
       </div>
