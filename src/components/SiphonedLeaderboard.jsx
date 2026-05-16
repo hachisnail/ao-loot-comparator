@@ -3,14 +3,13 @@ import { useState } from 'react';
 export default function SiphonedLeaderboard() {
   const [webhookUrl, setWebhookUrl] = useState('');
   const [rawLogs, setRawLogs] = useState('');
-  const [timeframe, setTimeframe] = useState('all');
+  const [timeframe, setTimeframe] = useState('24h'); // Default to 24h since 'all' is removed
   const [status, setStatus] = useState({ state: 'idle', message: '' }); 
 
   const timeframeLabels = {
-    'all': 'All Time',
     '24h': 'Last 24 Hours',
-    '48h': 'Last 48 Hours',
-    '7d': 'Last 7 Days'
+    '7d': 'Last 7 Days',
+    '4w': 'Last 4 Weeks'
   };
 
   const processAndSend = async () => {
@@ -89,9 +88,10 @@ export default function SiphonedLeaderboard() {
         }
 
         let cutoff = 0;
+        // The math to calculate 24h, 7d, and 4w (28 days)
         if (timeframe === '24h') cutoff = maxTime - (24 * 60 * 60 * 1000);
-        else if (timeframe === '48h') cutoff = maxTime - (48 * 60 * 60 * 1000);
         else if (timeframe === '7d') cutoff = maxTime - (7 * 24 * 60 * 60 * 1000);
+        else if (timeframe === '4w') cutoff = maxTime - (28 * 24 * 60 * 60 * 1000); 
 
         const filteredLogs = parsedLogs.filter(log => log.time >= cutoff);
 
@@ -200,7 +200,7 @@ export default function SiphonedLeaderboard() {
             <label className="text-stone-300 font-bold text-sm uppercase tracking-wide block mb-2">Discord Webhook URL</label>
             <input 
               type="password" 
-              placeholder="[https://discord.com/api/webhooks/](https://discord.com/api/webhooks/)..."
+              placeholder="https://discord.com/api/webhooks/..."
               value={webhookUrl}
               onChange={(e) => setWebhookUrl(e.target.value)}
               className="w-full bg-[#050505] border border-stone-800 p-3 text-xs text-stone-300 focus:outline-none focus:border-[#5865f2]/80 transition-colors"
@@ -213,10 +213,9 @@ export default function SiphonedLeaderboard() {
               onChange={(e) => setTimeframe(e.target.value)}
               className="w-full bg-[#050505] border border-stone-800 p-3 text-xs text-stone-300 focus:outline-none focus:border-amber-500/50 appearance-none cursor-pointer uppercase tracking-widest"
             >
-              <option value="all">All Logs in File</option>
               <option value="24h">Last 24 Hours</option>
-              <option value="48h">Last 48 Hours</option>
               <option value="7d">Last 7 Days</option>
+              <option value="4w">Last 4 Weeks</option>
             </select>
           </div>
         </div>
